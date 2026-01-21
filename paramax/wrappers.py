@@ -6,13 +6,14 @@ applied using :func:`unwrap`.
 
 from abc import abstractmethod
 from collections.abc import Callable
-from typing import Any, Generic, TypeVar
+from functools import partial
+from typing import Any, Generic, Literal, TypeVar
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax import lax
-from jax.nn import softplus
+from jax.nn import softmax, softplus
 from jax.tree_util import tree_leaves
 from jaxtyping import Array, PyTree
 
@@ -157,6 +158,71 @@ class NonTrainable(AbstractUnwrappable[T]):
     def unwrap(self) -> T:
         differentiable, static = eqx.partition(self.tree, eqx.is_array_like)
         return eqx.combine(lax.stop_gradient(differentiable), static)
+
+
+class RealToIncreasingOnInterval(AbstractUnwrappable[Array]):
+    """Unconstrained vector to increasing on a fixed interval.
+
+    Unconstrained vector is passed into softmax to obtain widths,
+    which are cumulatively summed and scaled to fit the interval
+    (or the remainder not used by min_width).
+
+    Note an array of size d parameterizes widths, so maps to an array
+    of size d+1 if both endpoints are included, d if one is included,
+    and d-1 if neither are included.
+    """
+
+    arr: Array
+    interval: tuple[float | int, float | int]
+    min_width: float
+    include_ends: Literal["both", "neither", "lower", "upper"]
+
+    def __init__(
+        self,
+        arr: Array,
+        interval: tuple[float | int, float | int],
+        *,
+        min_width: float,
+        include_ends: Literal["both", "neither", "lower", "upper"],
+    ):
+        scale = interval[1] - interval[0]
+        n_widths = arr.shape[-1]
+
+        if min_width <= 0:
+            raise ValueError("min_width must be greater than or equal to 0.")
+
+        if interval[1] <= interval[0]:
+            raise ValueError("interval[1] must be greater than interval[0]")
+
+        if min_width * n_widths > scale:
+            raise ValueError(
+                "min_width*n_widths is greater than the interval width, so cannot be "
+                "satisfied."
+            )
+        self.arr = arr
+        self.interval = interval
+        self.min_width = min_width
+        self.include_ends = include_ends
+
+    def unwrap(self) -> Array:
+        scale = self.interval[1] - self.interval[0]
+
+        @partial(jnp.vectorize, signature="(a)->(b)")
+        def _unwrap(arr):
+            n_widths = self.arr.shape[-1]
+            widths = softmax(arr)
+            free = scale - self.min_width * n_widths
+            widths = self.min_width + free * widths
+            lower, upper = jnp.array([self.interval[0]]), jnp.array([self.interval[1]])
+            return jnp.concatenate(
+                [
+                    *([lower] if self.include_ends in ("lower", "both") else []),
+                    jnp.cumsum(widths, axis=-1)[:-1] + lower,
+                    *([upper] if self.include_ends in ("upper", "both") else []),
+                ]
+            )
+
+        return _unwrap(self.arr)
 
 
 class WeightNormalization(AbstractUnwrappable[Array]):
