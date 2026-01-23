@@ -161,21 +161,28 @@ class NonTrainable(AbstractUnwrappable[T]):
 
 
 class RealToIncreasingOnInterval(AbstractUnwrappable[Array]):
-    """Unconstrained vector to increasing on a fixed interval.
+    """Map an unconstrained vector to increasing points on a fixed interval.
 
-    Unconstrained vector is passed into softmax to obtain widths,
-    which are cumulatively summed and scaled to fit the interval
-    (or the remainder not used by min_width).
+    The input vector is transformed via a softmax into positive widths, to fill
+    the interval after adding minimum width. The cumulative sum of the widths
+    produces the incresing points.
 
-    Note an array of size d parameterizes widths, so maps to an array
-    of size d+1 if both endpoints are included, d if one is included,
-    and d-1 if neither are included.
+    If an array of size d is used, the result has size d+1 if both
+    endpoints are included, d if one is included, and d-1 if neither
+    are included.
+
+    Args:
+        arr: Unconstrained vector parameterizing the widths.
+        interval: (lower, upper) bounds of the interval.
+        min_width: Minimum spacing between consecutive points.
+        include_endpoints: Which endpoints to include: "both", "neither",
+            "lower", or "upper".
     """
 
     arr: Array
     interval: tuple[float | int, float | int]
     min_width: float
-    include_ends: Literal["both", "neither", "lower", "upper"]
+    include_endpoints: Literal["both", "neither", "lower", "upper"]
 
     def __init__(
         self,
@@ -183,7 +190,7 @@ class RealToIncreasingOnInterval(AbstractUnwrappable[Array]):
         interval: tuple[float | int, float | int],
         *,
         min_width: float,
-        include_ends: Literal["both", "neither", "lower", "upper"],
+        include_endpoints: Literal["both", "neither", "lower", "upper"],
     ):
         scale = interval[1] - interval[0]
         n_widths = arr.shape[-1]
@@ -199,10 +206,16 @@ class RealToIncreasingOnInterval(AbstractUnwrappable[Array]):
                 "min_width*n_widths is greater than the interval width, so cannot be "
                 "satisfied."
             )
+
+        if include_endpoints not in ["both", "neither", "lower", "upper"]:
+            raise ValueError(
+                "include_endpoints must be one of 'both', 'neither', 'lower', or 'upper'",
+            )
+
         self.arr = arr
         self.interval = interval
         self.min_width = min_width
-        self.include_ends = include_ends
+        self.include_endpoints = include_endpoints
 
     def unwrap(self) -> Array:
         scale = self.interval[1] - self.interval[0]
@@ -216,9 +229,9 @@ class RealToIncreasingOnInterval(AbstractUnwrappable[Array]):
             lower, upper = jnp.array([self.interval[0]]), jnp.array([self.interval[1]])
             return jnp.concatenate(
                 [
-                    *([lower] if self.include_ends in ("lower", "both") else []),
+                    *([lower] if self.include_endpoints in ("lower", "both") else []),
                     jnp.cumsum(widths, axis=-1)[:-1] + lower,
-                    *([upper] if self.include_ends in ("upper", "both") else []),
+                    *([upper] if self.include_endpoints in ("upper", "both") else []),
                 ]
             )
 

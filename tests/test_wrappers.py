@@ -54,7 +54,7 @@ def test_RealToIncreasingOnInterval(case):
         case["arr"],
         (-1, 2),
         min_width=0.1,
-        include_ends=case["include_ends"],
+        include_endpoints=case["include_ends"],
     )
     result = unwrap(real_to_inc)
     assert pytest.approx(case["expected"]) == result
@@ -102,7 +102,7 @@ test_cases = {
     "Parameterize-exp": lambda key: Parameterize(jnp.exp, jr.normal(key, (10,))),
     "WeightNormalization": lambda key: WeightNormalization(jr.normal(key, (10, 2))),
     "RealToIncreasingOnInterval": lambda key: RealToIncreasingOnInterval(
-        jnp.zeros(10), (-7, 5), min_width=0.2, include_ends="upper"
+        jnp.zeros(10), (-7, 5), min_width=0.2, include_endpoints="upper"
     ),
 }
 
