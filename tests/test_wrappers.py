@@ -1,3 +1,4 @@
+# $$
 from math import prod
 
 import equinox as eqx
@@ -9,10 +10,51 @@ from jax.tree_util import tree_map
 from paramax.wrappers import (
     NonTrainable,
     Parameterize,
+    RealToIncreasingOnInterval,
     WeightNormalization,
     non_trainable,
     unwrap,
 )
+
+to_inverval_test_cases = [
+    {
+        "arr": jnp.zeros(2),
+        "include_ends": "both",
+        "expected": jnp.array([-1, 0.5, 2]),
+    },
+    {
+        "arr": jnp.zeros(2),
+        "include_ends": "lower",
+        "expected": jnp.array([-1, 0.5]),
+    },
+    {
+        "arr": jnp.zeros(2),
+        "include_ends": "upper",
+        "expected": jnp.array([0.5, 2]),
+    },
+    {
+        "arr": jnp.zeros(2),
+        "include_ends": "neither",
+        "expected": jnp.array([0.5]),
+    },
+    {
+        "arr": jnp.array([-100, 0]),
+        "include_ends": "both",
+        "expected": jnp.array([-1, -0.9, 2]),
+    },
+]
+
+
+@pytest.mark.parametrize("case", to_inverval_test_cases)
+def test_RealToIncreasingOnInterval(case):
+    real_to_inc = RealToIncreasingOnInterval(
+        case["arr"],
+        (-1, 2),
+        min_width=0.1,
+        include_endpoints=case["include_ends"],
+    )
+    result = unwrap(real_to_inc)
+    assert pytest.approx(case["expected"]) == result
 
 
 def test_Parameterize():
@@ -29,7 +71,6 @@ def test_nested_unwrap():
 
 
 def test_non_trainable():
-
     model = (jnp.ones(3), 1)
     model = non_trainable(model)
 
@@ -54,9 +95,12 @@ def test_WeightNormalization():
 
 
 test_cases = {
-    "NonTrainable": lambda key: NonTrainable(jr.normal(key, 10)),
-    "Parameterize-exp": lambda key: Parameterize(jnp.exp, jr.normal(key, 10)),
+    "NonTrainable": lambda key: NonTrainable(jr.normal(key, (10,))),
+    "Parameterize-exp": lambda key: Parameterize(jnp.exp, jr.normal(key, (10,))),
     "WeightNormalization": lambda key: WeightNormalization(jr.normal(key, (10, 2))),
+    "RealToIncreasingOnInterval": lambda key: RealToIncreasingOnInterval(
+        jnp.zeros(10), (-7, 5), min_width=0.2, include_endpoints="upper"
+    ),
 }
 
 

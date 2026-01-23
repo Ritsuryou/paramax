@@ -6,6 +6,7 @@ from .wrappers import (
     AbstractUnwrappable,
     NonTrainable,
     Parameterize,
+    RealToIncreasingOnInterval,
     WeightNormalization,
     contains_unwrappables,
     non_trainable,
