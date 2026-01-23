@@ -16,9 +16,6 @@ from paramax.wrappers import (
     unwrap,
 )
 
-# %%
-
-
 to_inverval_test_cases = [
     {
         "arr": jnp.zeros(2),
