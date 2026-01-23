@@ -20,6 +20,7 @@ __all__ = [
     "NonTrainable",
     "Parameterize",
     "WeightNormalization",
+    "RealToIncreasingOnInterval",
     "contains_unwrappables",
     "non_trainable",
     "unwrap",
